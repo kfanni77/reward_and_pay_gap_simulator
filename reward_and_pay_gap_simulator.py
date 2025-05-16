@@ -1,5 +1,3 @@
-# reward_and_pay_gap_simulator.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -12,14 +10,27 @@ import statsmodels.api as sm
 df = pd.read_excel("Dummy_HR_Compensation_Dataset.xlsx")
 df['BaseSalary_Original'] = df['BaseSalary']
 
+# --- Filters ---
+st.sidebar.title("Filters")
+selected_levels = st.sidebar.multiselect("Filter by Level", options=sorted(df['Level'].unique()), default=sorted(df['Level'].unique()))
+selected_departments = st.sidebar.multiselect("Filter by Department", options=sorted(df['Department'].unique()), default=sorted(df['Department'].unique()))
+
+filtered_df = df[df['Level'].isin(selected_levels) & df['Department'].isin(selected_departments)].copy()
+
+# --- Gender Representation Chart ---
+st.sidebar.subheader("Gender Representation")
+gender_counts = filtered_df['Gender'].value_counts(normalize=True).mul(100).round(1)
+st.sidebar.bar_chart(gender_counts)
+
 # --- Salary Bands ---
 salary_band_summary = df.groupby('Level')['BaseSalary'].agg(['min', 'median', 'max']).reset_index()
 salary_band_summary.columns = ['Level', 'BandMin', 'BandMid', 'BandMax']
-df = df.merge(salary_band_summary, on='Level', how='left')
-df['BandPosition'] = (df['BaseSalary'] - df['BandMin']) / (df['BandMax'] - df['BandMin'])
-df['BandPosition'] = df['BandPosition'].clip(0, 1.5)
+filtered_df = filtered_df.merge(salary_band_summary, on='Level', how='left')
 
-# --- Sidebar Controls ---
+filtered_df['BandPosition'] = (filtered_df['BaseSalary'] - filtered_df['BandMin']) / (filtered_df['BandMax'] - filtered_df['BandMin'])
+filtered_df['BandPosition'] = filtered_df['BandPosition'].clip(0, 1.5)
+
+# --- Merit Simulation ---
 st.sidebar.title("Base Merit % by Performance Rating")
 base_merit_percent = {
     1: st.sidebar.slider("Rating 1", 0.00, 0.05, 0.00, step=0.005),
@@ -29,7 +40,7 @@ base_merit_percent = {
     5: st.sidebar.slider("Rating 5", 0.00, 0.12, 0.05, step=0.005),
 }
 
-df['BaseMeritPct'] = df['PerformanceRating'].map(base_merit_percent)
+filtered_df['BaseMeritPct'] = filtered_df['PerformanceRating'].map(base_merit_percent)
 
 def adjustment_factor(pos):
     if pos < 0.0: return 1.5
@@ -38,19 +49,13 @@ def adjustment_factor(pos):
     elif pos <= 1.2: return 0.5
     else: return 0.0
 
-df['BandAdjustment'] = df['BandPosition'].apply(adjustment_factor)
-df['AdjustedMeritPct'] = df['BaseMeritPct'] * df['BandAdjustment']
-df['FinalMeritIncrease'] = df['BaseSalary'] * df['AdjustedMeritPct']
-df['FinalMeritPct'] = df['AdjustedMeritPct']
-df['BaseSalary'] = df['BaseSalary_Original'] + df['FinalMeritIncrease']
+filtered_df['BandAdjustment'] = filtered_df['BandPosition'].apply(adjustment_factor)
+filtered_df['AdjustedMeritPct'] = filtered_df['BaseMeritPct'] * filtered_df['BandAdjustment']
+filtered_df['FinalMeritIncrease'] = filtered_df['BaseSalary'] * filtered_df['AdjustedMeritPct']
+filtered_df['FinalMeritPct'] = filtered_df['AdjustedMeritPct']
+filtered_df['BaseSalary'] = filtered_df['BaseSalary_Original'] + filtered_df['FinalMeritIncrease']
 
-# --- Bonus Logic ---
-df['TeamScore'] = np.random.randint(1, 6, size=len(df))
-df['RetentionRisk'] = np.random.choice([0, 1], size=len(df), p=[0.7, 0.3])
-df['NormPerf'] = df['PerformanceRating'] / df['PerformanceRating'].max()
-df['NormTeam'] = df['TeamScore'] / df['TeamScore'].max()
-df['NormRisk'] = df['RetentionRisk']
-
+# --- Bonus Calculation ---
 st.sidebar.title("Bonus Allocation Weights")
 w_perf = st.sidebar.slider("Performance Weight", 0.0, 1.0, 0.5, step=0.05)
 w_team = st.sidebar.slider("Team Score Weight", 0.0, 1.0, 0.3, step=0.05)
@@ -61,68 +66,76 @@ w_perf /= total_weight
 w_team /= total_weight
 w_ret /= total_weight
 
-bonus_mean = df['Bonus'].mean()
-df['SystemBonusRecommendation'] = (
-    w_perf * df['NormPerf'] + w_team * df['NormTeam'] + w_ret * df['NormRisk']
+filtered_df['TeamScore'] = np.random.randint(1, 6, size=len(filtered_df))
+filtered_df['RetentionRisk'] = np.random.choice([0, 1], size=len(filtered_df), p=[0.7, 0.3])
+filtered_df['NormPerf'] = filtered_df['PerformanceRating'] / filtered_df['PerformanceRating'].max()
+filtered_df['NormTeam'] = filtered_df['TeamScore'] / filtered_df['TeamScore'].max()
+filtered_df['NormRisk'] = filtered_df['RetentionRisk']
+
+bonus_mean = filtered_df['Bonus'].mean()
+filtered_df['SystemBonusRecommendation'] = (
+    w_perf * filtered_df['NormPerf'] + w_team * filtered_df['NormTeam'] + w_ret * filtered_df['NormRisk']
 ) * bonus_mean * 2
-df['BonusDelta_vs_System'] = df['Bonus'] - df['SystemBonusRecommendation']
+filtered_df['BonusDelta_vs_System'] = filtered_df['Bonus'] - filtered_df['SystemBonusRecommendation']
 
-# --- Gender Pay Gap Calculations ---
+# --- GPG ---
 st.subheader("Gender Pay Gap Impact")
-avg_salary_gender_before = df.groupby('Gender')['BaseSalary_Original'].mean()
-avg_salary_gender_after = df.groupby('Gender')['BaseSalary'].mean()
 
-unadj_gpg_before = ((avg_salary_gender_before['Male'] - avg_salary_gender_before['Female']) / avg_salary_gender_before['Male']) * 100
-unadj_gpg_after = ((avg_salary_gender_after['Male'] - avg_salary_gender_after['Female']) / avg_salary_gender_after['Male']) * 100
-unadj_gpg_delta = unadj_gpg_after - unadj_gpg_before
-unadj_delta_color = "normal" if abs(unadj_gpg_after) > abs(unadj_gpg_before) else "inverse"
+def calc_unadjusted_gpg(data):
+    avg_salary = data.groupby('Gender')['BaseSalary'].mean()
+    return ((avg_salary['Male'] - avg_salary['Female']) / avg_salary['Male']) * 100
 
-st.metric("Unadjusted GPG (Before, %)", f"{unadj_gpg_before:.2f}%")
-st.metric("Unadjusted GPG (After, %)", f"{unadj_gpg_after:.2f}%", delta=f"{unadj_gpg_delta:+.2f}%", delta_color=unadj_delta_color)
+def calc_adjusted_gpg(data):
+    dummies = pd.get_dummies(data, columns=['Gender', 'Level', 'Department'], drop_first=True)
+    features = ['TenureYears', 'PerformanceRating'] + [c for c in dummies.columns if c.startswith(('Gender_', 'Level_', 'Department_'))]
+    X = sm.add_constant(dummies[features])
+    y = dummies['BaseSalary']
+    model = sm.OLS(y, X).fit()
+    gap_eur = model.params.get('Gender_Male', np.nan)
+    gap_pct = (gap_eur / data[data['Gender'] == 'Female']['BaseSalary'].mean()) * 100
+    return gap_eur, gap_pct
 
-# --- Adjusted GPG OLS ---
-df_encoded = pd.get_dummies(df.copy(), columns=['Gender', 'Level', 'Department'], drop_first=True)
-reg_columns = ['TenureYears', 'PerformanceRating'] + [col for col in df_encoded.columns if col.startswith(('Level_', 'Department_', 'Gender_'))]
+before_unadj = calc_unadjusted_gpg(filtered_df[['Gender', 'BaseSalary_Original']].assign(BaseSalary=filtered_df['BaseSalary_Original']))
+after_unadj = calc_unadjusted_gpg(filtered_df)
 
-X = df_encoded[reg_columns].astype(float)
-X = sm.add_constant(X)
-y_before = pd.to_numeric(df_encoded['BaseSalary_Original'], errors='coerce')
-y_after = pd.to_numeric(df_encoded['BaseSalary'], errors='coerce')
+before_adj_eur, before_adj_pct = calc_adjusted_gpg(filtered_df.assign(BaseSalary=filtered_df['BaseSalary_Original']))
+after_adj_eur, after_adj_pct = calc_adjusted_gpg(filtered_df)
 
-Xb = pd.concat([X, y_before], axis=1).dropna()
-Xa = pd.concat([X, y_after], axis=1).dropna()
+col_a, col_b = st.columns(2)
+col_a.metric("Unadjusted GPG Before", f"{before_unadj:.2f}%")
+col_b.metric("Unadjusted GPG After", f"{after_unadj:.2f}%", delta=f"{after_unadj - before_unadj:+.2f}%", delta_color="inverse" if abs(after_unadj) < abs(before_unadj) else "normal")
 
-X_before = Xb[X.columns]
-y_before = Xb[y_before.name]
-X_after = Xa[X.columns]
-y_after = Xa[y_after.name]
+col_c, col_d = st.columns(2)
+col_c.metric("Adjusted GPG Before (EUR)", f"€{before_adj_eur:.2f}")
+col_d.metric("Adjusted GPG After (EUR)", f"€{after_adj_eur:.2f}", delta=f"€{after_adj_eur - before_adj_eur:+.2f}", delta_color="normal" if after_adj_eur < before_adj_eur else "inverse")
 
-model_before = sm.OLS(y_before, X_before).fit()
-model_after = sm.OLS(y_after, X_after).fit()
+col_e, col_f = st.columns(2)
+col_e.metric("Adjusted GPG Before (%)", f"{before_adj_pct:.2f}%")
+col_f.metric("Adjusted GPG After (%)", f"{after_adj_pct:.2f}%", delta=f"{after_adj_pct - before_adj_pct:+.2f}%", delta_color="normal" if after_adj_pct < before_adj_pct else "inverse")
 
-adj_gap_before = model_before.params.get('Gender_Male', 0)
-adj_gap_after = model_after.params.get('Gender_Male', 0)
-adj_gap_delta = adj_gap_after - adj_gap_before
+# --- Charts ---
+st.subheader("Pay Gap Visualizations")
+fig_gap, ax_gap = plt.subplots(1, 2, figsize=(10, 4))
+ax_gap[0].bar(['Before', 'After'], [before_unadj, after_unadj], color=['gray', 'skyblue'])
+ax_gap[0].set_title("Unadjusted GPG (%)")
+ax_gap[1].bar(['Before', 'After'], [before_adj_eur, after_adj_eur], color=['gray', 'lightgreen'])
+ax_gap[1].set_title("Adjusted GPG (EUR)")
+st.pyplot(fig_gap)
 
-f_avg_before = avg_salary_gender_before['Female']
-f_avg_after = avg_salary_gender_after['Female']
-adj_gpg_before_pct = (adj_gap_before / f_avg_before) * 100
-adj_gpg_after_pct = (adj_gap_after / f_avg_after) * 100
-adj_gpg_delta_pct = adj_gpg_after_pct - adj_gpg_before_pct
+# --- Extended Download Columns ---
+for gender in ['Male', 'Female']:
+    df[f'Diff_CompanyMedian_{gender}'] = df['BaseSalary_Original'] - df[df['Gender'] == gender]['BaseSalary_Original'].median()
+    df[f'Diff_DeptMedian_{gender}'] = df.groupby('Department')['BaseSalary_Original'].transform(lambda x: x - x[df['Gender'] == gender].median())
+    df[f'Diff_LevelMedian_{gender}'] = df.groupby('Level')['BaseSalary_Original'].transform(lambda x: x - x[df['Gender'] == gender].median())
 
-color_eur = "normal" if adj_gap_after < adj_gap_before else "inverse"
-color_pct = "normal" if adj_gpg_after_pct < adj_gpg_before_pct else "inverse"
-
-st.metric("Adjusted GPG (Before, EUR)", f"€{adj_gap_before:.2f}")
-st.metric("Adjusted GPG (After, EUR)", f"€{adj_gap_after:.2f}", delta=f"€{adj_gap_delta:+.2f}", delta_color=color_eur)
-
-st.metric("Adjusted GPG (Before, %)", f"{adj_gpg_before_pct:.2f}%")
-st.metric("Adjusted GPG (After, %)", f"{adj_gpg_after_pct:.2f}%", delta=f"{adj_gpg_delta_pct:+.2f}%", delta_color=color_pct)
+# --- Data Table ---
+if st.checkbox("Show Filtered Employee Data"):
+    st.dataframe(filtered_df)
 
 # --- Download ---
-def convert_df(df):
+def convert_df(data):
     output = BytesIO()
-    df.to_excel(output, index=False, engine='openpyxl')
+    data.to_excel(output, index=False, engine='openpyxl')
     output.seek(0)
     return output
 
