@@ -84,7 +84,7 @@ filtered_df['SystemBonusRecommendation'] = (
 filtered_df['BonusDelta_vs_System'] = filtered_df['Bonus'] - filtered_df['SystemBonusRecommendation']
 
 # --- GPG ---
-st.title("Merit & Bonus Simulation App")
+st.title("Merit & Bonus Simulation")
 
 col1, col2 = st.columns(2)
 col1.metric("Merit Budget", f"€{MERIT_BUDGET:,.0f}")
@@ -163,8 +163,8 @@ st.subheader("Pay Gap Visualizations")
 fig_gap, ax_gap = plt.subplots(1, 2, figsize=(10, 4))
 ax_gap[0].bar(['Before', 'After'], [before_unadj, after_unadj], color=['gray', 'skyblue'])
 ax_gap[0].set_title("Unadjusted GPG (%)")
-ax_gap[1].bar(['Before', 'After'], [before_adj_eur, after_adj_eur], color=['gray', 'lightgreen'])
-ax_gap[1].set_title("Adjusted GPG (EUR)")
+ax_gap[1].bar(['Before', 'After'], [before_adj_pct, after_adj_pct], color=['gray', 'lightgreen'])
+ax_gap[1].set_title("Adjusted GPG (%)")
 st.pyplot(fig_gap)
 
 # --- Extended Download Columns ---
