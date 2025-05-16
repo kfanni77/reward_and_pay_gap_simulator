@@ -31,22 +31,42 @@ filtered_df['BandPosition'] = (filtered_df['BaseSalary'] - filtered_df['BandMin'
 filtered_df['BandPosition'] = filtered_df['BandPosition'].clip(0, 1.5)
 
 # --- Merit Simulation ---
+st.title("Merit & Bonus Simulation")
+
 # Merit Budget
 MERIT_BUDGET = st.sidebar.number_input("Total Merit Budget (€)", min_value=10000, max_value=1000000, value=200000, step=10000)
 
 # Pay Gap Correction Slider
-st.sidebar.subheader("Pay Gap Correction")
-gpg_correction_target = st.sidebar.slider("Correct Gender Pay Gap (%)", 0.0, 100.0, 0.0, step=5.0)
+gpg_correction_target = st.sidebar.slider("Adjusted Gender Pay Gap Reduction (%)", 0, 100, 0, step=5)
 
-# Calculate pay gap correction amount
-female_avg = filtered_df[filtered_df['Gender'] == 'Female']['BaseSalary'].mean()
-male_avg = filtered_df[filtered_df['Gender'] == 'Male']['BaseSalary'].mean()
-pay_gap_eur = male_avg - female_avg
+# --- Adjusted GPG Reduction Logic ---
+def compute_adjusted_gap(dataframe):
+    df_encoded = pd.get_dummies(dataframe.copy(), columns=['Gender', 'Level', 'Department'], drop_first=True)
+    reg_columns = ['TenureYears', 'PerformanceRating'] + [
+        col for col in df_encoded.columns if col.startswith('Level_') or col.startswith('Department_') or col.startswith('Gender_')
+    ]
+    X = df_encoded[reg_columns].astype(float)
+    X = sm.add_constant(X)
+    y = pd.to_numeric(df_encoded['BaseSalary'], errors='coerce')
+    model = sm.OLS(y, X).fit()
+    return model.params.get('Gender_Male', 0.0)
 
-# Determine adjustment per person
-correction_per_female = (gpg_correction_target / 100.0) * pay_gap_eur
-filtered_df.loc[filtered_df['Gender'] == 'Female', 'BaseSalary'] += correction_per_female
+if gpg_correction_target > 0:
+    original_gap = compute_adjusted_gap(filtered_df)
+    reduction_target = original_gap * (1 - gpg_correction_target / 100)
 
+    # Estimate correction factor iteratively
+    correction_factor = 0.0
+    for factor in np.arange(0, 0.51, 0.001):
+        df_test = filtered_df.copy()
+        df_test.loc[df_test['Gender'] == 'Female', 'BaseSalary'] *= (1 + factor)
+        new_gap = compute_adjusted_gap(df_test)
+        if new_gap <= reduction_target:
+            correction_factor = factor
+            break
+    filtered_df.loc[filtered_df['Gender'] == 'Female', 'BaseSalary'] *= (1 + correction_factor)
+
+# --- Continue Merit & Bonus Logic ---
 st.sidebar.title("Base Merit % by Performance Rating")
 base_merit_percent = {
     1: st.sidebar.slider("Rating 1", 0.00, 0.05, 0.00, step=0.005),
@@ -58,12 +78,18 @@ base_merit_percent = {
 
 filtered_df['BaseMeritPct'] = filtered_df['PerformanceRating'].map(base_merit_percent)
 
+
 def adjustment_factor(pos):
-    if pos < 0.0: return 1.5
-    elif pos < 0.5: return 1.2
-    elif pos <= 1.0: return 1.0
-    elif pos <= 1.2: return 0.5
-    else: return 0.0
+    if pos < 0.0:
+        return 1.5
+    elif pos < 0.5:
+        return 1.2
+    elif pos <= 1.0:
+        return 1.0
+    elif pos <= 1.2:
+        return 0.5
+    else:
+        return 0.0
 
 filtered_df['BandAdjustment'] = filtered_df['BandPosition'].apply(adjustment_factor)
 filtered_df['AdjustedMeritPct'] = filtered_df['BaseMeritPct'] * filtered_df['BandAdjustment']
@@ -71,6 +97,7 @@ filtered_df['FinalMeritIncrease'] = filtered_df['BaseSalary'] * filtered_df['Adj
 filtered_df['FinalMeritPct'] = filtered_df['AdjustedMeritPct']
 filtered_df['RecommendedMeritIncrease'] = filtered_df['FinalMeritIncrease']
 filtered_df['BaseSalary'] += filtered_df['FinalMeritIncrease']
+
 # --- Bonus Calculation ---
 st.sidebar.title("Bonus Allocation Weights")
 w_perf = st.sidebar.slider("Performance Weight", 0.0, 1.0, 0.5, step=0.05)
