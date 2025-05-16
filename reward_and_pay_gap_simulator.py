@@ -148,15 +148,21 @@ after_adj_eur, after_adj_pct = calc_adjusted_gpg(filtered_df)
 
 col_a, col_b = st.columns(2)
 col_a.metric("Unadjusted GPG Before", f"{before_unadj:.2f}%")
-col_b.metric("Unadjusted GPG After", f"{after_unadj:.2f}%", delta=f"{after_unadj - before_unadj:+.2f}%", delta_color="inverse" if abs(after_unadj) < abs(before_unadj) else "normal")
+unadj_delta = after_unadj - before_unadj
+unadj_delta_color = gpg_delta_color(before_unadj, after_unadj)
+col_b.metric("Unadjusted GPG After", f"{after_unadj:.2f}%", delta=f"{unadj_delta:+.2f}%", delta_color=unadj_delta_color)
 
 col_c, col_d = st.columns(2)
 col_c.metric("Adjusted GPG Before (EUR)", f"€{before_adj_eur:.2f}")
-col_d.metric("Adjusted GPG After (EUR)", f"€{after_adj_eur:.2f}", delta=f"€{after_adj_eur - before_adj_eur:+.2f}", delta_color="normal" if after_adj_eur < before_adj_eur else "inverse")
+adj_eur_delta = after_adj_eur - before_adj_eur
+adj_eur_delta_color = gpg_delta_color(before_adj_eur, after_adj_eur)
+col_d.metric("Adjusted GPG After (EUR)", f"€{after_adj_eur:.2f}", delta=f"€{adj_eur_delta:+.2f}", delta_color=adj_eur_delta_color)
 
 col_e, col_f = st.columns(2)
 col_e.metric("Adjusted GPG Before (%)", f"{before_adj_pct:.2f}%")
-col_f.metric("Adjusted GPG After (%)", f"{after_adj_pct:.2f}%", delta=f"{after_adj_pct - before_adj_pct:+.2f}%", delta_color="normal" if after_adj_pct < before_adj_pct else "inverse")
+adj_pct_delta = after_adj_pct - before_adj_pct
+adj_pct_delta_color = gpg_delta_color(before_adj_pct, after_adj_pct)
+col_f.metric("Adjusted GPG After (%)", f"{after_adj_pct:.2f}%", delta=f"{adj_pct_delta:+.2f}%", delta_color=adj_pct_delta_color)
 
 # --- Charts ---
 st.subheader("Pay Gap Visualizations")
