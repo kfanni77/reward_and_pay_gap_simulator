@@ -85,8 +85,8 @@ def calc_unadjusted_gpg(data):
     avg_salary = data.groupby('Gender')['BaseSalary'].mean()
     return ((avg_salary['Male'] - avg_salary['Female']) / avg_salary['Male']) * 100
 
-def calc_adjusted_gpg(data):
-   df_encoded = pd.get_dummies(data.copy(), columns=['Gender', 'Level', 'Department'], drop_first=True)
+def calc_adjusted_gpg(dataframe):
+    df_encoded = pd.get_dummies(dataframe.copy(), columns=['Gender', 'Level', 'Department'], drop_first=True)
     reg_columns = ['TenureYears', 'PerformanceRating'] + [
         col for col in df_encoded.columns if col.startswith('Level_') or col.startswith('Department_') or col.startswith('Gender_')
     ]
@@ -95,8 +95,8 @@ def calc_adjusted_gpg(data):
     y = pd.to_numeric(df_encoded['BaseSalary'], errors='coerce')
     model = sm.OLS(y, X).fit()
     gap_eur = model.params.get('Gender_Male', np.nan)
-    female_avg = data[data['Gender'] == 'Female']['BaseSalary'].mean()
-    gap_pct = (gap_eur / female_avg) * 100 if female_avg else np.nan
+    avg_female_salary = dataframe[dataframe['Gender'] == 'Female']['BaseSalary'].mean()
+    gap_pct = (gap_eur / avg_female_salary) * 100 if avg_female_salary else np.nan
     return gap_eur, gap_pct
 
 before_unadj = calc_unadjusted_gpg(filtered_df[['Gender', 'BaseSalary_Original']].assign(BaseSalary=filtered_df['BaseSalary_Original']))
