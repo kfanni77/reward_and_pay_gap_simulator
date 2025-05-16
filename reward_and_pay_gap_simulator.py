@@ -34,6 +34,19 @@ filtered_df['BandPosition'] = filtered_df['BandPosition'].clip(0, 1.5)
 # Merit Budget
 MERIT_BUDGET = st.sidebar.number_input("Total Merit Budget (€)", min_value=10000, max_value=1000000, value=200000, step=10000)
 
+# Pay Gap Correction Slider
+st.sidebar.subheader("Pay Gap Correction")
+gpg_correction_target = st.sidebar.slider("Correct Gender Pay Gap (%)", 0.0, 100.0, 0.0, step=5.0)
+
+# Calculate pay gap correction amount
+female_avg = filtered_df[filtered_df['Gender'] == 'Female']['BaseSalary'].mean()
+male_avg = filtered_df[filtered_df['Gender'] == 'Male']['BaseSalary'].mean()
+pay_gap_eur = male_avg - female_avg
+
+# Determine adjustment per person
+correction_per_female = (gpg_correction_target / 100.0) * pay_gap_eur
+filtered_df.loc[filtered_df['Gender'] == 'Female', 'BaseSalary'] += correction_per_female
+
 st.sidebar.title("Base Merit % by Performance Rating")
 base_merit_percent = {
     1: st.sidebar.slider("Rating 1", 0.00, 0.05, 0.00, step=0.005),
@@ -56,10 +69,8 @@ filtered_df['BandAdjustment'] = filtered_df['BandPosition'].apply(adjustment_fac
 filtered_df['AdjustedMeritPct'] = filtered_df['BaseMeritPct'] * filtered_df['BandAdjustment']
 filtered_df['FinalMeritIncrease'] = filtered_df['BaseSalary'] * filtered_df['AdjustedMeritPct']
 filtered_df['FinalMeritPct'] = filtered_df['AdjustedMeritPct']
-filtered_df['BaseSalary'] = filtered_df['BaseSalary_Original'] + filtered_df['FinalMeritIncrease']
-
 filtered_df['RecommendedMeritIncrease'] = filtered_df['FinalMeritIncrease']
-
+filtered_df['BaseSalary'] += filtered_df['FinalMeritIncrease']
 # --- Bonus Calculation ---
 st.sidebar.title("Bonus Allocation Weights")
 w_perf = st.sidebar.slider("Performance Weight", 0.0, 1.0, 0.5, step=0.05)
