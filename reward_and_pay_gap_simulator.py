@@ -58,6 +58,8 @@ filtered_df['FinalMeritIncrease'] = filtered_df['BaseSalary'] * filtered_df['Adj
 filtered_df['FinalMeritPct'] = filtered_df['AdjustedMeritPct']
 filtered_df['BaseSalary'] = filtered_df['BaseSalary_Original'] + filtered_df['FinalMeritIncrease']
 
+filtered_df['RecommendedMeritIncrease'] = filtered_df['FinalMeritIncrease']
+
 # --- Bonus Calculation ---
 st.sidebar.title("Bonus Allocation Weights")
 w_perf = st.sidebar.slider("Performance Weight", 0.0, 1.0, 0.5, step=0.05)
