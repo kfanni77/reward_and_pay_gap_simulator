@@ -122,7 +122,6 @@ filtered_df['SystemBonusRecommendation'] = (
 filtered_df['BonusDelta_vs_System'] = filtered_df['Bonus'] - filtered_df['SystemBonusRecommendation']
 
 # --- GPG ---
-st.title("Merit & Bonus Simulation")
 
 col1, col2 = st.columns(2)
 col1.metric("Merit Budget", f"€{MERIT_BUDGET:,.0f}")
