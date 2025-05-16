@@ -98,8 +98,6 @@ def calc_adjusted_gpg(data):
     female_avg = data[data['Gender'] == 'Female']['BaseSalary'].mean()
     gap_pct = (gap_eur / female_avg) * 100 if female_avg else np.nan
     return gap_eur, gap_pct
-    if df_encoded.shape[0] < 2:
-    return np.nan, np.nan
 
 before_unadj = calc_unadjusted_gpg(filtered_df[['Gender', 'BaseSalary_Original']].assign(BaseSalary=filtered_df['BaseSalary_Original']))
 after_unadj = calc_unadjusted_gpg(filtered_df)
