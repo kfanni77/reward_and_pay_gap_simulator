@@ -157,6 +157,17 @@ after_unadj = calc_unadjusted_gpg(filtered_df)
 before_adj_eur, before_adj_pct = calc_adjusted_gpg(filtered_df.assign(BaseSalary=filtered_df['BaseSalary_Original']))
 after_adj_eur, after_adj_pct = calc_adjusted_gpg(filtered_df)
 
+# --- Helper: Color logic for GPG deltas ---
+def gpg_delta_color(before, after):
+    # Both positive or one negative one positive
+    if (before >= 0 and after >= 0) or (before < 0 and after >= 0) or (before >= 0 and after < 0):
+        return "normal" if after < before else "inverse"
+    # Both negative
+    elif before < 0 and after < 0:
+        return "normal" if abs(after) < abs(before) else "inverse"
+    else:
+        return "inverse"
+
 col_a, col_b = st.columns(2)
 col_a.metric("Unadjusted GPG Before", f"{before_unadj:.2f}%")
 unadj_delta = after_unadj - before_unadj
