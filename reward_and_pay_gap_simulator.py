@@ -31,6 +31,9 @@ filtered_df['BandPosition'] = (filtered_df['BaseSalary'] - filtered_df['BandMin'
 filtered_df['BandPosition'] = filtered_df['BandPosition'].clip(0, 1.5)
 
 # --- Merit Simulation ---
+# Merit Budget
+MERIT_BUDGET = st.sidebar.number_input("Total Merit Budget (€)", min_value=10000, max_value=1000000, value=200000, step=10000)
+
 st.sidebar.title("Base Merit % by Performance Rating")
 base_merit_percent = {
     1: st.sidebar.slider("Rating 1", 0.00, 0.05, 0.00, step=0.005),
@@ -79,6 +82,42 @@ filtered_df['SystemBonusRecommendation'] = (
 filtered_df['BonusDelta_vs_System'] = filtered_df['Bonus'] - filtered_df['SystemBonusRecommendation']
 
 # --- GPG ---
+st.title("Merit & Bonus Simulation App")
+
+col1, col2 = st.columns(2)
+col1.metric("Merit Budget", f"€{MERIT_BUDGET:,.0f}")
+col2.metric("Simulated Merit Spend", f"€{filtered_df['RecommendedMeritIncrease'].sum():,.0f}",
+            delta=f"€{filtered_df['RecommendedMeritIncrease'].sum() - MERIT_BUDGET:,.0f}")
+
+st.subheader("Average Scaled Merit % by Performance Rating")
+avg_pct_by_rating = filtered_df.groupby('PerformanceRating')['AdjustedMeritPct'].mean().round(4).reset_index()
+st.dataframe(avg_pct_by_rating)
+
+st.subheader("Bonus Allocation Comparison")
+col3, col4 = st.columns(2)
+col3.metric("Actual Bonus Total", f"€{filtered_df['Bonus'].sum():,.0f}")
+col4.metric("System-Recommended Bonus Total", f"€{filtered_df['SystemBonusRecommendation'].sum():,.0f}",
+            delta=f"€{filtered_df['Bonus'].sum() - filtered_df['SystemBonusRecommendation'].sum():,.0f}")
+
+st.subheader("Bonus Distribution: Actual vs. Recommended")
+fig1, ax1 = plt.subplots(figsize=(8, 5))
+sns.scatterplot(data=filtered_df, x='SystemBonusRecommendation', y='Bonus', hue='RetentionRisk', palette='coolwarm', alpha=0.6, ax=ax1)
+ax1.plot([filtered_df['SystemBonusRecommendation'].min(), filtered_df['SystemBonusRecommendation'].max()],
+         [filtered_df['SystemBonusRecommendation'].min(), filtered_df['SystemBonusRecommendation'].max()],
+         linestyle='--', color='gray')
+ax1.set_title("Actual vs. Recommended Bonus")
+ax1.set_xlabel("System-Recommended Bonus (€)")
+ax1.set_ylabel("Actual Bonus (€)")
+st.pyplot(fig1)
+
+fig2, ax2 = plt.subplots(figsize=(8, 4))
+sns.histplot(filtered_df['BonusDelta_vs_System'], bins=30, kde=True, color='slateblue', ax=ax2)
+ax2.axvline(0, linestyle='--', color='black')
+ax2.set_title("Bonus Delta: Actual - System Recommendation")
+ax2.set_xlabel("Bonus Delta (€)")
+ax2.set_ylabel("Employee Count")
+st.pyplot(fig2)
+
 st.subheader("Gender Pay Gap Impact")
 
 def calc_unadjusted_gpg(data):
